@@ -31,7 +31,7 @@ from twisted.internet import threads
 from leap.bitmask.config.leapsettings import LeapSettings
 from leap.bitmask.config.providerconfig import ProviderConfig
 from leap.bitmask.crypto.srpauth import SRPAuth
-from leap.bitmask.gui.loggerwindow import LoggerWindow
+from leap.bitmask.gui.loggerwindow_mixin import LoggerWindowMixin
 from leap.bitmask.gui.login import LoginWidget
 from leap.bitmask.gui.preferenceswindow import PreferencesWindow
 from leap.bitmask.gui.statuspanel import StatusPanelWidget
@@ -61,7 +61,6 @@ from leap.bitmask.services.eip.vpnlaunchers import EIPNoTunKextLoaded
 
 from leap.bitmask import __version__ as VERSION
 from leap.bitmask.util.keyring_helpers import has_keyring
-from leap.bitmask.util.leap_log_handler import LeapLogHandler
 
 from leap.bitmask.services.mail.smtpconfig import SMTPConfig
 
@@ -78,7 +77,7 @@ from ui_mainwindow import Ui_MainWindow
 logger = logging.getLogger(__name__)
 
 
-class MainWindow(QtGui.QMainWindow, WizardMixin):
+class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin):
     """
     Main window for login and presenting status updates to the user
     """
@@ -163,6 +162,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin):
         self._login_widget.show_wizard.connect(
             self._launch_wizard)
 
+        # XXX move to loggerwindowmixin
         self.ui.btnShowLog.clicked.connect(self._show_logger_window)
         self.ui.btnPreferences.clicked.connect(self._show_preferences)
 
@@ -327,52 +327,6 @@ class MainWindow(QtGui.QMainWindow, WizardMixin):
                               bypass_checks=bypass_checks)
         else:
             self._finish_init()
-
-    def _uncheck_logger_button(self):
-        """
-        SLOT
-        Sets the checked state of the loggerwindow button to false.
-        """
-        self.ui.btnShowLog.setChecked(False)
-
-    def _get_leap_logging_handler(self):
-        """
-        Gets the leap handler from the top level logger
-
-        :return: a logging handler or None
-        :rtype: LeapLogHandler or None
-        """
-        leap_logger = logging.getLogger('leap')
-        for h in leap_logger.handlers:
-            if isinstance(h, LeapLogHandler):
-                return h
-        return None
-
-    def _show_logger_window(self):
-        """
-        SLOT
-        TRIGGERS:
-          self.ui.action_show_logs.triggered
-          self.ui.btnShowLog.clicked
-
-        Displays the window with the history of messages logged until now
-        and displays the new ones on arrival.
-        """
-        if self._logger_window is None:
-            leap_log_handler = self._get_leap_logging_handler()
-            if leap_log_handler is None:
-                logger.error('Leap logger handler not found')
-                return
-            else:
-                self._logger_window = LoggerWindow(handler=leap_log_handler)
-                self._logger_window.setVisible(
-                    not self._logger_window.isVisible())
-                self.ui.btnShowLog.setChecked(self._logger_window.isVisible())
-        else:
-            self._logger_window.setVisible(not self._logger_window.isVisible())
-            self.ui.btnShowLog.setChecked(self._logger_window.isVisible())
-
-        self._logger_window.finished.connect(self._uncheck_logger_button)
 
     def _show_preferences(self):
         """
