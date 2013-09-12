@@ -667,3 +667,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         self._settings.set_windowstate(self.saveState())
 
         QtGui.QMainWindow.closeEvent(self, e)
+
+    def quit(self):
+        print "quitting for real!"
+        self._quit()

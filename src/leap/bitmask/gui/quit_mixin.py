@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class QuitMixin(QtCore.QObject):
 
-    def quit(self):
+    def _quit(self):
         """
         Cleanup and tidely close the main window before quitting.
         """
