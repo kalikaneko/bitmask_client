@@ -32,10 +32,11 @@ from leap.bitmask.config.leapsettings import LeapSettings
 from leap.bitmask.config.providerconfig import ProviderConfig
 from leap.bitmask.crypto.srpauth import SRPAuth
 from leap.bitmask.gui.loggerwindow import LoggerWindow
-from leap.bitmask.gui.preferenceswindow import PreferencesWindow
-from leap.bitmask.gui.wizard import Wizard
 from leap.bitmask.gui.login import LoginWidget
+from leap.bitmask.gui.preferenceswindow import PreferencesWindow
 from leap.bitmask.gui.statuspanel import StatusPanelWidget
+from leap.bitmask.gui.wizard.mixins import WizardMixin
+
 from leap.bitmask.services.eip.eipbootstrapper import EIPBootstrapper
 from leap.bitmask.services.eip.eipconfig import EIPConfig
 from leap.bitmask.services.eip.providerbootstrapper import ProviderBootstrapper
@@ -77,7 +78,7 @@ from ui_mainwindow import Ui_MainWindow
 logger = logging.getLogger(__name__)
 
 
-class MainWindow(QtGui.QMainWindow):
+class MainWindow(QtGui.QMainWindow, WizardMixin):
     """
     Main window for login and presenting status updates to the user
     """
@@ -321,64 +322,18 @@ class MainWindow(QtGui.QMainWindow):
         self._smtp_config = SMTPConfig()
 
         if self._first_run():
-            self._wizard_firstrun = True
-            self._wizard = Wizard(standalone=standalone,
-                                  bypass_checks=bypass_checks)
-            # Give this window time to finish init and then show the wizard
-            QtCore.QTimer.singleShot(1, self._launch_wizard)
-            self._wizard.accepted.connect(self._finish_init)
-            self._wizard.rejected.connect(self._rejected_wizard)
+            # XXX get standalone flag from inside function call
+            self._init_wizard(standalone=standalone,
+                              bypass_checks=bypass_checks)
         else:
             self._finish_init()
 
-    def _rejected_wizard(self):
+    def _uncheck_logger_button(self):
         """
         SLOT
-        TRIGGERS: self._wizard.rejected
-
-        Called if the wizard has been cancelled or closed before
-        finishing.
+        Sets the checked state of the loggerwindow button to false.
         """
-        if self._wizard_firstrun:
-            self._settings.set_properprovider(False)
-            self.quit()
-        else:
-            self._finish_init()
-
-    def _launch_wizard(self):
-        """
-        SLOT
-        TRIGGERS:
-          self._login_widget.show_wizard
-          self.ui.action_wizard.triggered
-
-        Also called in first run.
-
-        Launches the wizard, creating the object itself if not already
-        there.
-        """
-        if self._wizard is None:
-            self._wizard = Wizard(bypass_checks=self._bypass_checks)
-            self._wizard.accepted.connect(self._finish_init)
-            self._wizard.rejected.connect(self._wizard.close)
-
-        self.setVisible(False)
-        # Do NOT use exec_, it will use a child event loop!
-        # Refer to http://www.themacaque.com/?p=1067 for funny details.
-        self._wizard.show()
-        if IS_MAC:
-            self._wizard.raise_()
-        self._wizard.finished.connect(self._wizard_finished)
-
-    def _wizard_finished(self):
-        """
-        SLOT
-        TRIGGERS
-          self._wizard.finished
-
-        Called when the wizard has finished.
-        """
-        self.setVisible(True)
+        self.ui.btnShowLog.setChecked(False)
 
     def _get_leap_logging_handler(self):
         """
@@ -448,13 +403,6 @@ class MainWindow(QtGui.QMainWindow):
         It sets the soledad object as ready to use.
         """
         self._soledad_ready = True
-
-    def _uncheck_logger_button(self):
-        """
-        SLOT
-        Sets the checked state of the loggerwindow button to false.
-        """
-        self.ui.btnShowLog.setChecked(False)
 
     def _new_updates_available(self, req):
         """
@@ -582,33 +530,6 @@ class MainWindow(QtGui.QMainWindow):
                     self._login_widget.set_password(
                         saved_password.decode("utf8"))
                     self._login()
-
-    def _try_autostart_eip(self):
-        """
-        Tries to autostart EIP
-        """
-        default_provider = self._settings.get_defaultprovider()
-
-        if default_provider is None:
-            logger.info("Cannot autostart Encrypted Internet because there is "
-                        "no default provider configured")
-            return
-
-        self._action_eip_provider.setText(default_provider)
-
-        self._enabled_services = self._settings.get_enabled_services(
-            default_provider)
-
-        if self._provisional_provider_config.load(
-            os.path.join("leap",
-                         "providers",
-                         default_provider,
-                         "provider.json")):
-            self._download_eip_config()
-        else:
-            # XXX: Display a proper message to the user
-            logger.error("Unable to load %s config, cannot autostart." %
-                         (default_provider,))
 
     def _show_systray(self):
         """
@@ -833,6 +754,8 @@ class MainWindow(QtGui.QMainWindow):
             logger.error(data[self._provider_bootstrapper.ERROR_KEY])
             self._login_widget.set_enabled(True)
 
+    # login/logout methods
+
     def _login(self):
         """
         SLOT
@@ -907,6 +830,114 @@ class MainWindow(QtGui.QMainWindow):
             self._login_defer.cancel()
 
         self._login_widget.set_status(self.tr("Log in cancelled by the user."))
+
+    def _logout(self):
+        """
+        SLOT
+        TRIGGER: self.ui.action_log_out.triggered
+
+        Starts the logout sequence
+        """
+
+        self._soledad_bootstrapper.cancel_bootstrap()
+
+        # XXX: If other defers are doing authenticated stuff, this
+        # might conflict with those. CHECK!
+        threads.deferToThread(self._srp_auth.logout)
+        self.logout.emit()
+
+    def _done_logging_out(self, ok, message):
+        """
+        SLOT
+        TRIGGER: self._srp_auth.logout_finished
+
+        Switches the stackedWidget back to the login stage after
+        logging out
+        """
+        self._logged_user = None
+        self.ui.action_log_out.setEnabled(False)
+        self.ui.stackedWidget.setCurrentIndex(self.LOGIN_INDEX)
+        self._login_widget.set_password("")
+        self._login_widget.set_enabled(True)
+        self._login_widget.set_status("")
+        self.ui.btnPreferences.setEnabled(False)
+
+    def _cleanup_pidfiles(self):
+        """
+        Removes lockfiles on a clean shutdown.
+
+        Triggered after aboutToQuit signal.
+        """
+        if IS_WIN:
+            WindowsLock.release_all_locks()
+
+    def _cleanup_and_quit(self):
+        """
+        Call all the cleanup actions in a serialized way.
+        Should be called from the quit function.
+        """
+        logger.debug('About to quit, doing cleanup...')
+
+        if self._imap_service is not None:
+            self._imap_service.stop()
+
+        if self._srp_auth is not None:
+            if self._srp_auth.get_session_id() is not None or \
+               self._srp_auth.get_token() is not None:
+                # XXX this can timeout after loong time: See #3368
+                self._srp_auth.logout()
+
+        if self._soledad:
+            logger.debug("Closing soledad...")
+            self._soledad.close()
+        else:
+            logger.error("No instance of soledad was found.")
+
+        logger.debug('Terminating vpn')
+        self._vpn.terminate(shutdown=True)
+
+        if self._login_defer:
+            logger.debug("Cancelling login defer.")
+            self._login_defer.cancel()
+
+        if self._download_provider_defer:
+            logger.debug("Cancelling download provider defer.")
+            self._download_provider_defer.cancel()
+
+        # TODO missing any more cancels?
+
+        logger.debug('Cleaning pidfiles')
+        self._cleanup_pidfiles()
+
+    def quit(self):
+        """
+        Cleanup and tidely close the main window before quitting.
+        """
+        # TODO separate the shutting down of services from the
+        # UI stuff.
+
+        # Set this in case that the app is hidden
+        qApp = QtCore.QCoreApplication.instance()
+        qApp.setQuitOnLastWindowClosed(True)
+
+        self._cleanup_and_quit()
+
+        self._really_quit = True
+
+        if self._wizard:
+            self._wizard.close()
+
+        if self._logger_window:
+            self._logger_window.close()
+
+        self.close()
+
+        if self._quit_callback:
+            self._quit_callback()
+
+        logger.debug('Bye.')
+
+    # end login/logout methods --------------------------------------
 
     def _provider_config_loaded(self, data):
         """
@@ -1178,9 +1209,6 @@ class MainWindow(QtGui.QMainWindow):
 
     # end service control methods (imap)
 
-    ###################################################################
-    # Service control methods: eip
-
     def _get_socket_host(self):
         """
         Returns the socket and port to be used for VPN
@@ -1188,7 +1216,7 @@ class MainWindow(QtGui.QMainWindow):
         :rtype: tuple (str, str) (host, port)
         """
         # TODO make this properly multiplatform
-        # TODO get this out of gui/
+        # TODO get this out of gui/ ---> move to util
 
         if platform.system() == "Windows":
             host = "localhost"
@@ -1200,6 +1228,37 @@ class MainWindow(QtGui.QMainWindow):
             port = "unix"
 
         return host, port
+
+    ###################################################################
+    # Service control methods: eip
+
+    def _try_autostart_eip(self):
+        """
+        Tries to autostart EIP
+        """
+        default_provider = self._settings.get_defaultprovider()
+
+        if default_provider is None:
+            logger.info("Cannot autostart Encrypted Internet because there is "
+                        "no default provider configured")
+            return
+
+        self._action_eip_provider.setText(default_provider)
+
+        self._enabled_services = self._settings.get_enabled_services(
+            default_provider)
+
+        if self._provisional_provider_config.load(
+            os.path.join("leap",
+                         "providers",
+                         default_provider,
+                         "provider.json")):
+            self._download_eip_config()
+        else:
+            # XXX: Display a proper message to the user
+            logger.error("Unable to load %s config, cannot autostart." %
+                         (default_provider,))
+
 
     def _start_eip(self):
         """
@@ -1291,25 +1350,6 @@ class MainWindow(QtGui.QMainWindow):
         else:
             self._already_started_eip = True
 
-    def _set_eipstatus_off(self):
-        """
-        Sets eip status to off
-        """
-        self._status_panel.set_eip_status(self.tr("OFF"), error=True)
-        self._status_panel.set_eip_status_icon("error")
-        self._status_panel.set_startstop_enabled(True)
-        self._status_panel.eip_stopped()
-
-        self._set_action_eipstart_off()
-
-    def _set_action_eipstart_off(self):
-        """
-        Sets eip startstop action to OFF status.
-        """
-        self._action_eip_startstop.setText(self.tr("Turn ON"))
-        self._action_eip_startstop.disconnect(self)
-        self._action_eip_startstop.triggered.connect(
-            self._start_eip)
 
     def _stop_eip(self, abnormal=False):
         """
@@ -1428,37 +1468,6 @@ class MainWindow(QtGui.QMainWindow):
                         "Configuration."),
                 error=True)
 
-    def _logout(self):
-        """
-        SLOT
-        TRIGGER: self.ui.action_log_out.triggered
-
-        Starts the logout sequence
-        """
-
-        self._soledad_bootstrapper.cancel_bootstrap()
-
-        # XXX: If other defers are doing authenticated stuff, this
-        # might conflict with those. CHECK!
-        threads.deferToThread(self._srp_auth.logout)
-        self.logout.emit()
-
-    def _done_logging_out(self, ok, message):
-        """
-        SLOT
-        TRIGGER: self._srp_auth.logout_finished
-
-        Switches the stackedWidget back to the login stage after
-        logging out
-        """
-        self._logged_user = None
-        self.ui.action_log_out.setEnabled(False)
-        self.ui.stackedWidget.setCurrentIndex(self.LOGIN_INDEX)
-        self._login_widget.set_password("")
-        self._login_widget.set_enabled(True)
-        self._login_widget.set_status("")
-        self.ui.btnPreferences.setEnabled(False)
-
     def _intermediate_stage(self, data):
         """
         SLOT
@@ -1565,80 +1574,29 @@ class MainWindow(QtGui.QMainWindow):
         if IS_MAC:
             self.raise_()
 
-    def _cleanup_pidfiles(self):
+    # Display methods
+
+    def _set_eipstatus_off(self):
         """
-        Removes lockfiles on a clean shutdown.
-
-        Triggered after aboutToQuit signal.
+        Sets eip status to off
         """
-        if IS_WIN:
-            WindowsLock.release_all_locks()
+        self._status_panel.set_eip_status(self.tr("OFF"), error=True)
+        self._status_panel.set_eip_status_icon("error")
+        self._status_panel.set_startstop_enabled(True)
+        self._status_panel.eip_stopped()
 
-    def _cleanup_and_quit(self):
+        self._set_action_eipstart_off()
+
+    def _set_action_eipstart_off(self):
         """
-        Call all the cleanup actions in a serialized way.
-        Should be called from the quit function.
+        Sets eip startstop action to OFF status.
         """
-        logger.debug('About to quit, doing cleanup...')
+        self._action_eip_startstop.setText(self.tr("Turn ON"))
+        self._action_eip_startstop.disconnect(self)
+        self._action_eip_startstop.triggered.connect(
+            self._start_eip)
 
-        if self._imap_service is not None:
-            self._imap_service.stop()
 
-        if self._srp_auth is not None:
-            if self._srp_auth.get_session_id() is not None or \
-               self._srp_auth.get_token() is not None:
-                # XXX this can timeout after loong time: See #3368
-                self._srp_auth.logout()
-
-        if self._soledad:
-            logger.debug("Closing soledad...")
-            self._soledad.close()
-        else:
-            logger.error("No instance of soledad was found.")
-
-        logger.debug('Terminating vpn')
-        self._vpn.terminate(shutdown=True)
-
-        if self._login_defer:
-            logger.debug("Cancelling login defer.")
-            self._login_defer.cancel()
-
-        if self._download_provider_defer:
-            logger.debug("Cancelling download provider defer.")
-            self._download_provider_defer.cancel()
-
-        # TODO missing any more cancels?
-
-        logger.debug('Cleaning pidfiles')
-        self._cleanup_pidfiles()
-
-    def quit(self):
-        """
-        Cleanup and tidely close the main window before quitting.
-        """
-        # TODO separate the shutting down of services from the
-        # UI stuff.
-
-        # Set this in case that the app is hidden
-        qApp = QtCore.QCoreApplication.instance()
-        qApp.setQuitOnLastWindowClosed(True)
-
-        self._cleanup_and_quit()
-
-        self._really_quit = True
-
-        if self._wizard:
-            self._wizard.close()
-
-        if self._logger_window:
-            self._logger_window.close()
-
-        self.close()
-
-        if self._quit_callback:
-            self._quit_callback()
-
-        logger.debug('Bye.')
 
 
 if __name__ == "__main__":

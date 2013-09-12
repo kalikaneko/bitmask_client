@@ -36,7 +36,7 @@ from leap.bitmask.util.password import basic_password_checks
 from leap.bitmask.services.eip.providerbootstrapper import ProviderBootstrapper
 from leap.bitmask.services import get_service_display_name, get_supported
 
-from ui_wizard import Ui_Wizard
+from leap.bitmask.gui.ui_wizard import Ui_Wizard
 
 logger = logging.getLogger(__name__)
 
