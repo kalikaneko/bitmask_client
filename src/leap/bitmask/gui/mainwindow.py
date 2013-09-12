@@ -31,11 +31,13 @@ from twisted.internet import threads
 from leap.bitmask.config.leapsettings import LeapSettings
 from leap.bitmask.config.providerconfig import ProviderConfig
 from leap.bitmask.crypto.srpauth import SRPAuth
-from leap.bitmask.gui.loggerwindow_mixin import LoggerWindowMixin
 from leap.bitmask.gui.login import LoginWidget
-from leap.bitmask.gui.preferenceswindow import PreferencesWindow
 from leap.bitmask.gui.statuspanel import StatusPanelWidget
+
+# mixins
 from leap.bitmask.gui.wizard.mixins import WizardMixin
+from leap.bitmask.gui.preferenceswindow import PreferencesMixin
+from leap.bitmask.gui.loggerwindow_mixin import LoggerWindowMixin
 
 from leap.bitmask.services.eip.eipbootstrapper import EIPBootstrapper
 from leap.bitmask.services.eip.eipconfig import EIPConfig
@@ -77,7 +79,8 @@ from ui_mainwindow import Ui_MainWindow
 logger = logging.getLogger(__name__)
 
 
-class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin):
+class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
+                 PreferencesMixin):
     """
     Main window for login and presenting status updates to the user
     """
@@ -277,6 +280,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin):
         self._status_panel.set_action_eip_startstop(
             self._action_eip_startstop)
 
+        # XXX move to preferencesmixin
         self._action_preferences = QtGui.QAction(self.tr("Preferences"), self)
         self._action_preferences.triggered.connect(self._show_preferences)
 
@@ -327,26 +331,6 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin):
                               bypass_checks=bypass_checks)
         else:
             self._finish_init()
-
-    def _show_preferences(self):
-        """
-        SLOT
-        TRIGGERS:
-          self.ui.action_show_preferences.triggered
-          self.ui.btnPreferences.clicked
-
-        Displays the preferences window.
-        """
-        preferences_window = PreferencesWindow(
-            self, self._srp_auth, self._settings, self._standalone)
-
-        if self._soledad_ready:
-            preferences_window.set_soledad_ready(self._soledad)
-        else:
-            self.soledad_ready.connect(
-                lambda: preferences_window.set_soledad_ready(self._soledad))
-
-        preferences_window.show()
 
     def _set_soledad_ready(self):
         """

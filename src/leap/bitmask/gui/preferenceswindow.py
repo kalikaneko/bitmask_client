@@ -461,3 +461,30 @@ class PreferencesWindow(QtGui.QDialog):
                 index = idx + 1
 
         self.ui.cbGateways.setCurrentIndex(index)
+
+
+class PreferencesMixin(QtCore.QObject):
+    """
+    Methods to be added to the mainwindow object
+    """
+
+    def _show_preferences(self):
+        """
+        SLOT
+        TRIGGERS:
+          self.ui.action_show_preferences.triggered
+          self.ui.btnPreferences.clicked
+
+        Displays the preferences window.
+        """
+        preferences_window = PreferencesWindow(
+            self, self._srp_auth, self._settings, self._standalone)
+
+        # XXX move this to state machine??
+        if self._soledad_ready:
+            preferences_window.set_soledad_ready(self._soledad)
+        else:
+            self.soledad_ready.connect(
+                lambda: preferences_window.set_soledad_ready(self._soledad))
+
+        preferences_window.show()
