@@ -55,6 +55,7 @@ def quit(app):
     from twisted.internet import reactor
     logger.debug('Stopping twisted reactor')
     try:
-        reactor.callLater(0, reactor.stop)
+        #reactor.callLater(0, reactor.stop)
+        reactor.stop
     except error.ReactorNotRunning:
         logger.debug('Reactor not running')
