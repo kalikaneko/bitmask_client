@@ -19,13 +19,10 @@ Main window for Bitmask.
 """
 import logging
 import os
-import platform
-import tempfile
 
 import keyring
 
 from PySide import QtCore, QtGui
-from twisted.internet import threads
 
 from leap.bitmask.config.leapsettings import LeapSettings
 from leap.bitmask.config.providerconfig import ProviderConfig
@@ -128,6 +125,10 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
                               certificates at bootstrap
         :type bypass_checks: bool
         """
+        # TODO We need to split and refactor the initialization.
+        # Each Mixin can be responsible for initializing its portion
+        # of variables, we need to isolate them as much as possible
+        # and minimize cross relations.
         QtGui.QMainWindow.__init__(self)
 
         # register leap events ########################################
@@ -233,6 +234,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         self._smtp_bootstrapper.download_config.connect(
             self._smtp_bootstrapped_stage)
 
+        # XXX move to eipmixin
         self._vpn = VPN(openvpn_verb=openvpn_verb)
         self._vpn.qtsigs.state_changed.connect(
             self._status_panel.update_vpn_state)
@@ -332,7 +334,6 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
             self._finish_init()
 
     # TODO SPLIT AND REFACTOR THIS METHOD -----
-
     def _finish_init(self):
         """
         SLOT
@@ -476,7 +477,6 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
             logger.error(data[self._provider_bootstrapper.ERROR_KEY])
             self._login_widget.set_enabled(True)
 
-
     def _get_best_provider_config(self):
         """
         Returns the best ProviderConfig to use at a moment. We may
@@ -615,30 +615,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         self._download_eip_config()
         # end refactor: services triggered method -----------
 
-    # -------------------------------------------------------
-    # XXX undecided
-
-    def _get_socket_host(self):
-        """
-        Returns the socket and port to be used for VPN
-
-        :rtype: tuple (str, str) (host, port)
-        """
-        # TODO make this properly multiplatform
-        # TODO get this out of gui/ ---> move to util
-
-        if platform.system() == "Windows":
-            host = "localhost"
-            port = "9876"
-        else:
-            # XXX cleanup this on exit too
-            host = os.path.join(tempfile.mkdtemp(prefix="leap-tmp"),
-                                'openvpn.socket')
-            port = "unix"
-
-        return host, port
-
-    # for some reasons, the methods for the Events below cannot be
+    # for some reason, the methods for the Events below cannot be
     # inside mixins. So lets leave them here in peace.
 
     def changeEvent(self, e):
@@ -669,5 +646,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         QtGui.QMainWindow.closeEvent(self, e)
 
     def quit(self):
-        print "quitting for real!"
+        """
+        Call the real quit method from QuitMixin
+        """
         self._quit()

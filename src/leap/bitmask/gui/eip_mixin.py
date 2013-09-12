@@ -38,6 +38,8 @@ from leap.bitmask.services.eip.vpnlaunchers import EIPNoPkexecAvailable
 from leap.bitmask.services.eip.vpnlaunchers import \
     EIPNoPolkitAuthAgentAvailable
 from leap.bitmask.services.eip.vpnlaunchers import EIPNoTunKextLoaded
+
+from leap.bitmask.services.eip import get_eip_socket_host_and_port
 from leap.bitmask.platform_init import IS_MAC
 
 from leap.common.check import leap_assert
@@ -46,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 class EIPMixin(QtCore.QObject):
+    # TODO move initialization bits here too
 
     def _try_autostart_eip(self):
         """
@@ -89,7 +92,7 @@ class EIPMixin(QtCore.QObject):
         provider_config = self._get_best_provider_config()
 
         try:
-            host, port = self._get_socket_host()
+            host, port = get_eip_socket_host_and_port()
             self._vpn.start(eipconfig=self._eip_config,
                             providerconfig=provider_config,
                             socket_host=host,
