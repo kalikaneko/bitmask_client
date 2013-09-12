@@ -110,4 +110,3 @@ class LoginMixin(QtCore.QObject):
             self._login_defer.cancel()
 
         self._login_widget.set_status(self.tr("Log in cancelled by the user."))
-

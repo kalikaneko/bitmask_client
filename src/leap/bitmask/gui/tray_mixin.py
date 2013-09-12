@@ -162,4 +162,3 @@ class TrayMixin(QtCore.QObject):
                     "<br>"
                     "<a href='https://leap.se'>More about LEAP"
                     "</a>") % (VERSION,))
-

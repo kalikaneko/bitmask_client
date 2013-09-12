@@ -43,4 +43,3 @@ def get_eip_socket_host_and_port():
                             'openvpn.socket')
         port = "unix"
     return host, port
-

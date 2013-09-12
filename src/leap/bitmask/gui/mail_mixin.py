@@ -126,7 +126,6 @@ class SoledadMixin(QtCore.QObject):
                 #    self.tr("MX is disabled"))
 
 
-
 class MailMixin(QtCore.QObject):
     """
     Methods related to mail services control (imap and smtp).

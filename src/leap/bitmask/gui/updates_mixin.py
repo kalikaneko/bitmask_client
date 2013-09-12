@@ -18,6 +18,7 @@
 Methods related to updates
 """
 from PySide import QtCore
+from PySide import QtGui
 
 
 class UpdatesMixin(QtCore.QObject):
@@ -71,4 +72,3 @@ class UpdatesMixin(QtCore.QObject):
 
         QtGui.QMessageBox.information(
             self, self.tr("Updates available"), msg)
-
