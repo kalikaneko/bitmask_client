@@ -34,13 +34,16 @@ from leap.bitmask.gui.login import LoginWidget
 from leap.bitmask.gui.statuspanel import StatusPanelWidget
 
 # mixins
-from leap.bitmask.gui.wizard.mixins import WizardMixin
-from leap.bitmask.gui.preferenceswindow import PreferencesMixin
+from leap.bitmask.gui.eip_mixin import EIPMixin
 from leap.bitmask.gui.loggerwindow_mixin import LoggerWindowMixin
-from leap.bitmask.gui.tray_mixin import TrayMixin
 from leap.bitmask.gui.login_mixin import LoginMixin
 from leap.bitmask.gui.logout_mixin import LogoutMixin
+from leap.bitmask.gui.mail_mixin import MailMixin
+from leap.bitmask.gui.mail_mixin import SoledadMixin
+from leap.bitmask.gui.preferenceswindow import PreferencesMixin
+from leap.bitmask.gui.tray_mixin import TrayMixin
 from leap.bitmask.gui.updates_mixin import UpdatesMixin
+from leap.bitmask.gui.wizard.mixins import WizardMixin
 from leap.bitmask.gui.quit_mixin import QuitMixin
 
 # services imports
@@ -51,28 +54,17 @@ from leap.bitmask.services.eip.providerbootstrapper import ProviderBootstrapper
 from leap.bitmask.services.soledad.soledadbootstrapper import \
     SoledadBootstrapper
 from leap.bitmask.services.mail.smtpbootstrapper import SMTPBootstrapper
-from leap.bitmask.services.mail import imap
 from leap.bitmask.platform_init import IS_MAC
 from leap.bitmask.platform_init import IS_WIN
 from leap.bitmask.platform_init.initializers import init_platform
 
 from leap.bitmask.services.eip.vpnprocess import VPN
-from leap.bitmask.services.eip.vpnprocess import OpenVPNAlreadyRunning
-from leap.bitmask.services.eip.vpnprocess import AlienOpenVPNAlreadyRunning
-
-from leap.bitmask.services.eip.vpnlaunchers import VPNLauncherException
-from leap.bitmask.services.eip.vpnlaunchers import OpenVPNNotFoundException
-from leap.bitmask.services.eip.vpnlaunchers import EIPNoPkexecAvailable
-from leap.bitmask.services.eip.vpnlaunchers import \
-    EIPNoPolkitAuthAgentAvailable
-from leap.bitmask.services.eip.vpnlaunchers import EIPNoTunKextLoaded
 
 from leap.bitmask.util.keyring_helpers import has_keyring
 
 from leap.bitmask.services.mail.smtpconfig import SMTPConfig
 
 if IS_WIN:
-    from leap.bitmask.platform_init.locks import WindowsLock
     from leap.bitmask.platform_init.locks import raise_window_ack
 
 from leap.common.check import leap_assert
@@ -86,7 +78,8 @@ logger = logging.getLogger(__name__)
 
 class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
                  PreferencesMixin, TrayMixin, LoginMixin, LogoutMixin,
-                 UpdatesMixin, QuitMixin):
+                 UpdatesMixin, QuitMixin,
+                 EIPMixin, SoledadMixin, MailMixin):
     """
     Main window for login and presenting status updates to the user
     """
@@ -338,15 +331,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         else:
             self._finish_init()
 
-    def _set_soledad_ready(self):
-        """
-        SLOT
-        TRIGGERS:
-            self.soledad_ready
-
-        It sets the soledad object as ready to use.
-        """
-        self._soledad_ready = True
+    # TODO SPLIT AND REFACTOR THIS METHOD -----
 
     def _finish_init(self):
         """
@@ -361,7 +346,6 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         mainwindow object, loading the saved user/password, or after
         the wizard has been executed.
         """
-        # XXX: May be this can be divided into two methods?
 
         providers = self._settings.get_configured_providers()
         self._login_widget.set_providers(providers)
@@ -438,7 +422,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         is_proper_provider = self._settings.get_properprovider()
         return not (has_provider_on_disk and is_proper_provider)
 
-    # provider methods -----------------------------------------------
+    # providerconfig methods
 
     def _download_provider_config(self):
         """
@@ -446,6 +430,7 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         provider configuration if it's not present, otherwise will
         emit the corresponding signals inmediately
         """
+        # TODO rename to "start_boostrapping" or similar?
         provider = self._login_widget.get_selected_provider()
 
         pb = self._provider_bootstrapper
@@ -491,7 +476,6 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
             logger.error(data[self._provider_bootstrapper.ERROR_KEY])
             self._login_widget.set_enabled(True)
 
-    # providerconfig methods
 
     def _get_best_provider_config(self):
         """
@@ -558,6 +542,8 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
         # messages, but in this case, the messages make more sense as
         # they come. Since they are "Unknown user" or "Unknown
         # password"
+
+        # XXX FIX UNKNOWN USER MESSAGE -- see #3656
         self._login_widget.set_status(message, error=not ok)
 
         if ok:
@@ -570,518 +556,6 @@ class MainWindow(QtGui.QMainWindow, WizardMixin, LoggerWindowMixin,
             self._login_defer = None
         else:
             self._login_widget.set_enabled(True)
-
-    def _soledad_intermediate_stage(self, data):
-        """
-        SLOT
-        TRIGGERS:
-          self._soledad_bootstrapper.download_config
-
-        If there was a problem, displays it, otherwise it does nothing.
-        This is used for intermediate bootstrapping stages, in case
-        they fail.
-        """
-        passed = data[self._soledad_bootstrapper.PASSED_KEY]
-        if not passed:
-            # TODO display in the GUI:
-            # should pass signal to a slot in status_panel
-            # that sets the global status
-            logger.error("Soledad failed to start: %s" %
-                         (data[self._soledad_bootstrapper.ERROR_KEY],))
-            self._retry_soledad_connection()
-
-    def _retry_soledad_connection(self):
-        """
-        Retries soledad connection.
-        """
-        logger.debug("Retrying soledad connection.")
-        if self._soledad_bootstrapper.should_retry_initialization():
-            self._soledad_bootstrapper.increment_retries_count()
-            threads.deferToThread(
-                self._soledad_bootstrapper.load_and_sync_soledad)
-        else:
-            logger.warning("Max number of soledad initialization "
-                           "retries reached.")
-
-    def _soledad_bootstrapped_stage(self, data):
-        """
-        SLOT
-        TRIGGERS:
-          self._soledad_bootstrapper.gen_key
-
-        If there was a problem, displays it, otherwise it does nothing.
-        This is used for intermediate bootstrapping stages, in case
-        they fail.
-
-        :param data: result from the bootstrapping stage for Soledad
-        :type data: dict
-        """
-        passed = data[self._soledad_bootstrapper.PASSED_KEY]
-        if not passed:
-            logger.debug("ERROR on soledad bootstrapping:")
-            logger.error(data[self._soledad_bootstrapper.ERROR_KEY])
-            return
-        else:
-            logger.debug("Done bootstrapping Soledad")
-
-            self._soledad = self._soledad_bootstrapper.soledad
-            self._keymanager = self._soledad_bootstrapper.keymanager
-
-        # Ok, now soledad is ready, so we can allow other things that
-        # depend on soledad to start.
-
-        # this will trigger start_imap_service
-        self.soledad_ready.emit()
-
-        # TODO connect all these activations to the soledad_ready
-        # signal so the logic is clearer to follow.
-
-        if self._provider_config.provides_mx() and \
-                self._enabled_services.count(self.MX_SERVICE) > 0:
-            self._smtp_bootstrapper.run_smtp_setup_checks(
-                self._provider_config,
-                self._smtp_config,
-                True)
-        else:
-            if self._enabled_services.count(self.MX_SERVICE) > 0:
-                pass  # TODO show MX status
-                #self._status_panel.set_eip_status(
-                #    self.tr("%s does not support MX") %
-                #    (self._provider_config.get_domain(),),
-                #                     error=True)
-            else:
-                pass  # TODO show MX status
-                #self._status_panel.set_eip_status(
-                #    self.tr("MX is disabled"))
-
-    ###################################################################
-    # Service control methods: smtp
-
-    def _smtp_bootstrapped_stage(self, data):
-        """
-        SLOT
-        TRIGGERS:
-          self._smtp_bootstrapper.download_config
-
-        If there was a problem, displays it, otherwise it does nothing.
-        This is used for intermediate bootstrapping stages, in case
-        they fail.
-
-        :param data: result from the bootstrapping stage for Soledad
-        :type data: dict
-        """
-        passed = data[self._smtp_bootstrapper.PASSED_KEY]
-        if not passed:
-            logger.error(data[self._smtp_bootstrapper.ERROR_KEY])
-            return
-        logger.debug("Done bootstrapping SMTP")
-
-        hosts = self._smtp_config.get_hosts()
-        # TODO handle more than one host and define how to choose
-        if len(hosts) > 0:
-            hostname = hosts.keys()[0]
-            logger.debug("Using hostname %s for SMTP" % (hostname,))
-            host = hosts[hostname][self.IP_KEY].encode("utf-8")
-            port = hosts[hostname][self.PORT_KEY]
-            # TODO move the start to _start_smtp_service
-
-            # TODO Make the encrypted_only configurable
-            # TODO pick local smtp port in a better way
-            # TODO remove hard-coded port and let leap.mail set
-            # the specific default.
-
-            from leap.mail.smtp import setup_smtp_relay
-            client_cert = self._eip_config.get_client_cert_path(
-                self._provider_config)
-            self._smtp_service = setup_smtp_relay(
-                port=2013,
-                keymanager=self._keymanager,
-                smtp_host=host,
-                smtp_port=port,
-                smtp_cert=client_cert,
-                smtp_key=client_cert,
-                encrypted_only=False)
-
-    def _stop_smtp_service(self):
-        """
-        SLOT
-        TRIGGERS:
-            self.logout
-        """
-        # There is a subtle difference here:
-        # we are stopping the factory for the smtp service here,
-        # but in the imap case we are just stopping the fetcher.
-        if self._smtp_service is not None:
-            logger.debug('Stopping smtp service.')
-            self._smtp_service.doStop()
-
-    ###################################################################
-    # Service control methods: imap
-
-    def _start_imap_service(self):
-        """
-        SLOT
-        TRIGGERS:
-            self.soledad_ready
-        """
-        if self._provider_config.provides_mx() and \
-                self._enabled_services.count(self.MX_SERVICE) > 0:
-            logger.debug('Starting imap service')
-
-            self._imap_service = imap.start_imap_service(
-                self._soledad,
-                self._keymanager)
-
-    def _on_mail_client_logged_in(self, req):
-        """
-        Triggers qt signal when client login event is received.
-        """
-        self.mail_client_logged_in.emit()
-
-    def _fetch_incoming_mail(self):
-        """
-        SLOT
-        TRIGGERS:
-            self.mail_client_logged_in
-        """
-        # TODO have a mutex over fetch operation.
-        if self._imap_service:
-            logger.debug('Client connected, fetching mail...')
-            self._imap_service.fetch()
-
-    def _stop_imap_service(self):
-        """
-        SLOT
-        TRIGGERS:
-            self.logout
-        """
-        # There is a subtle difference here:
-        # we are just stopping the fetcher here,
-        # but in the smtp case we are stopping the factory.
-        # We should homogenize both services.
-        if self._imap_service is not None:
-            logger.debug('Stopping imap service.')
-            self._imap_service.stop()
-
-    # end service control methods (imap) ---------------------------
-
-    ###################################################################
-    # Service control methods: eip
-
-    def _try_autostart_eip(self):
-        """
-        Tries to autostart EIP
-        """
-        default_provider = self._settings.get_defaultprovider()
-
-        if default_provider is None:
-            logger.info("Cannot autostart Encrypted Internet because there is "
-                        "no default provider configured")
-            return
-
-        self._action_eip_provider.setText(default_provider)
-
-        self._enabled_services = self._settings.get_enabled_services(
-            default_provider)
-
-        if self._provisional_provider_config.load(
-            os.path.join("leap",
-                         "providers",
-                         default_provider,
-                         "provider.json")):
-            self._download_eip_config()
-        else:
-            # XXX: Display a proper message to the user
-            logger.error("Unable to load %s config, cannot autostart." %
-                         (default_provider,))
-
-    def _start_eip(self):
-        """
-        SLOT
-        TRIGGERS:
-          self._status_panel.start_eip
-          self._action_eip_startstop.triggered
-        or called from _finish_eip_bootstrap
-
-        Starts EIP
-        """
-        self._status_panel.eip_pre_up()
-        self.user_stopped_eip = False
-        provider_config = self._get_best_provider_config()
-
-        try:
-            host, port = self._get_socket_host()
-            self._vpn.start(eipconfig=self._eip_config,
-                            providerconfig=provider_config,
-                            socket_host=host,
-                            socket_port=port)
-
-            self._settings.set_defaultprovider(
-                provider_config.get_domain())
-
-            provider = provider_config.get_domain()
-            if self._logged_user is not None:
-                provider = "%s@%s" % (self._logged_user, provider)
-
-            self._status_panel.set_provider(provider)
-
-            self._action_eip_provider.setText(provider_config.get_domain())
-
-            self._status_panel.eip_started()
-
-            # XXX refactor into status_panel method?
-            self._action_eip_startstop.setText(self.tr("Turn OFF"))
-            self._action_eip_startstop.disconnect(self)
-            self._action_eip_startstop.triggered.connect(
-                self._stop_eip)
-        except EIPNoPolkitAuthAgentAvailable:
-            self._status_panel.set_global_status(
-                # XXX this should change to polkit-kde where
-                # applicable.
-                self.tr("We could not find any "
-                        "authentication "
-                        "agent in your system.<br/>"
-                        "Make sure you have "
-                        "<b>polkit-gnome-authentication-"
-                        "agent-1</b> "
-                        "running and try again."),
-                error=True)
-            self._set_eipstatus_off()
-        except EIPNoTunKextLoaded:
-            self._status_panel.set_global_status(
-                self.tr("Encrypted Internet cannot be started because "
-                        "the tuntap extension is not installed properly "
-                        "in your system."))
-            self._set_eipstatus_off()
-        except EIPNoPkexecAvailable:
-            self._status_panel.set_global_status(
-                self.tr("We could not find <b>pkexec</b> "
-                        "in your system."),
-                error=True)
-            self._set_eipstatus_off()
-        except OpenVPNNotFoundException:
-            self._status_panel.set_global_status(
-                self.tr("We could not find openvpn binary."),
-                error=True)
-            self._set_eipstatus_off()
-        except OpenVPNAlreadyRunning as e:
-            self._status_panel.set_global_status(
-                self.tr("Another openvpn instance is already running, and "
-                        "could not be stopped."),
-                error=True)
-            self._set_eipstatus_off()
-        except AlienOpenVPNAlreadyRunning as e:
-            self._status_panel.set_global_status(
-                self.tr("Another openvpn instance is already running, and "
-                        "could not be stopped because it was not launched by "
-                        "Bitmask. Please stop it and try again."),
-                error=True)
-            self._set_eipstatus_off()
-        except VPNLauncherException as e:
-            # XXX We should implement again translatable exceptions so
-            # we can pass a translatable string to the panel (usermessage attr)
-            self._status_panel.set_global_status("%s" % (e,), error=True)
-            self._set_eipstatus_off()
-        else:
-            self._already_started_eip = True
-
-    def _stop_eip(self, abnormal=False):
-        """
-        SLOT
-        TRIGGERS:
-          self._status_panel.stop_eip
-          self._action_eip_startstop.triggered
-        or called from _eip_finished
-
-        Stops vpn process and makes gui adjustments to reflect
-        the change of state.
-
-        :param abnormal: whether this was an abnormal termination.
-        :type abnormal: bool
-        """
-        if abnormal:
-            logger.warning("Abnormal EIP termination.")
-
-        self.user_stopped_eip = True
-        self._vpn.terminate()
-
-        self._set_eipstatus_off()
-
-        self._already_started_eip = False
-        self._settings.set_defaultprovider(None)
-        if self._logged_user:
-            self._status_panel.set_provider(
-                "%s@%s" % (self._logged_user,
-                           self._get_best_provider_config().get_domain()))
-
-    def _download_eip_config(self):
-        """
-        Starts the EIP bootstrapping sequence
-        """
-        leap_assert(self._eip_bootstrapper, "We need an eip bootstrapper!")
-
-        provider_config = self._get_best_provider_config()
-
-        if provider_config.provides_eip() and \
-                self._enabled_services.count(self.OPENVPN_SERVICE) > 0 and \
-                not self._already_started_eip:
-
-            self._status_panel.set_eip_status(
-                self.tr("Starting..."))
-            self._eip_bootstrapper.run_eip_setup_checks(
-                provider_config,
-                download_if_needed=True)
-            self._already_started_eip = True
-        elif not self._already_started_eip:
-            if self._enabled_services.count(self.OPENVPN_SERVICE) > 0:
-                self._status_panel.set_eip_status(
-                    self.tr("Not supported"),
-                    error=True)
-            else:
-                self._status_panel.set_eip_status(self.tr("Disabled"))
-            self._status_panel.set_startstop_enabled(False)
-
-    def _finish_eip_bootstrap(self, data):
-        """
-        SLOT
-        TRIGGER: self._eip_bootstrapper.download_client_certificate
-
-        Starts the VPN thread if the eip configuration is properly
-        loaded
-        """
-        leap_assert(self._eip_config, "We need an eip config!")
-        passed = data[self._eip_bootstrapper.PASSED_KEY]
-
-        if not passed:
-            error_msg = self.tr("There was a problem with the provider")
-            self._status_panel.set_eip_status(error_msg, error=True)
-            logger.error(data[self._eip_bootstrapper.ERROR_KEY])
-            self._already_started_eip = False
-            return
-
-        provider_config = self._get_best_provider_config()
-
-        domain = provider_config.get_domain()
-
-        loaded = self._eip_config.loaded()
-        if not loaded:
-            eip_config_path = os.path.join("leap", "providers",
-                                           domain, "eip-service.json")
-            api_version = provider_config.get_api_version()
-            self._eip_config.set_api_version(api_version)
-            loaded = self._eip_config.load(eip_config_path)
-
-        if loaded:
-            self._start_eip()
-        else:
-            self._status_panel.set_eip_status(
-                self.tr("Could not load Encrypted Internet "
-                        "Configuration."),
-                error=True)
-
-    def _intermediate_stage(self, data):
-        """
-        SLOT
-        TRIGGERS:
-          self._provider_bootstrapper.name_resolution
-          self._provider_bootstrapper.https_connection
-          self._provider_bootstrapper.download_ca_cert
-          self._eip_bootstrapper.download_config
-
-        If there was a problem, displays it, otherwise it does nothing.
-        This is used for intermediate bootstrapping stages, in case
-        they fail.
-        """
-        passed = data[self._provider_bootstrapper.PASSED_KEY]
-        if not passed:
-            self._login_widget.set_enabled(True)
-            self._login_widget.set_status(
-                self.tr("Unable to connect: Problem with provider"))
-            logger.error(data[self._provider_bootstrapper.ERROR_KEY])
-
-    def _eip_intermediate_stage(self, data):
-        """
-        SLOT
-        TRIGGERS:
-          self._eip_bootstrapper.download_config
-
-        If there was a problem, displays it, otherwise it does nothing.
-        This is used for intermediate bootstrapping stages, in case
-        they fail.
-        """
-        passed = data[self._provider_bootstrapper.PASSED_KEY]
-        if not passed:
-            self._login_widget.set_status(
-                self.tr("Unable to connect: Problem with provider"))
-            logger.error(data[self._provider_bootstrapper.ERROR_KEY])
-            self._already_started_eip = False
-
-    def _eip_finished(self, exitCode):
-        """
-        SLOT
-        TRIGGERS:
-          self._vpn.process_finished
-
-        Triggered when the EIP/VPN process finishes to set the UI
-        accordingly.
-        """
-        logger.info("VPN process finished with exitCode %s..."
-                    % (exitCode,))
-
-        # Ideally we would have the right exit code here,
-        # but the use of different wrappers (pkexec, cocoasudo) swallows
-        # the openvpn exit code so we get zero exit in some cases  where we
-        # shouldn't. As a workaround we just use a flag to indicate
-        # a purposeful switch off, and mark everything else as unexpected.
-
-        # In the near future we should trigger a native notification from here,
-        # since the user really really wants to know she is unprotected asap.
-        # And the right thing to do will be to fail-close.
-
-        # TODO we should have a way of parsing the latest lines in the vpn
-        # log buffer so we can have a more precise idea of which type
-        # of error did we have (server side, local problem, etc)
-        abnormal = True
-
-        # XXX check if these exitCodes are pkexec/cocoasudo specific
-        if exitCode in (126, 127):
-            self._status_panel.set_global_status(
-                self.tr("Encrypted Internet could not be launched "
-                        "because you did not authenticate properly."),
-                error=True)
-            self._vpn.killit()
-        elif exitCode != 0 or not self.user_stopped_eip:
-            self._status_panel.set_global_status(
-                self.tr("Encrypted Internet finished in an "
-                        "unexpected manner!"), error=True)
-        else:
-            abnormal = False
-        if exitCode == 0 and IS_MAC:
-            # XXX remove this warning after I fix cocoasudo.
-            logger.warning("The above exit code MIGHT BE WRONG.")
-        self._stop_eip(abnormal)
-
-    # status ?? ---------------------------------------------
-
-    def _set_eipstatus_off(self):
-        """
-        Sets eip status to off
-        """
-        self._status_panel.set_eip_status(self.tr("OFF"), error=True)
-        self._status_panel.set_eip_status_icon("error")
-        self._status_panel.set_startstop_enabled(True)
-        self._status_panel.eip_stopped()
-
-        self._set_action_eipstart_off()
-
-    def _set_action_eipstart_off(self):
-        """
-        Sets eip startstop action to OFF status.
-        """
-        self._action_eip_startstop.setText(self.tr("Turn ON"))
-        self._action_eip_startstop.disconnect(self)
-        self._action_eip_startstop.triggered.connect(
-            self._start_eip)
 
     # window handling
 
