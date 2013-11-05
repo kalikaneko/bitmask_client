@@ -36,6 +36,8 @@ Launches Bitmask""", epilog=epilog)
     if not IS_RELEASE_VERSION:
         help_text = "Bypasses the certificate check for bootstrap"
         parser.add_argument('--danger', action="store_true", help=help_text)
+        parser.add_argument('-c', '--develop', action="store_true",
+                            help='Enables an interactive development console')
 
     parser.add_argument('-l', '--logfile', metavar="LOG FILE", nargs='?',
                         action="store", dest="log_file",

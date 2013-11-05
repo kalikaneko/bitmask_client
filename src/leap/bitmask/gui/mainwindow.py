@@ -22,7 +22,7 @@ import os
 
 from PySide import QtCore, QtGui
 from twisted.internet import threads
-from zope.proxy import ProxyBase, setProxiedObject, sameProxiedObjects
+from zope.proxy import ProxyBase, setProxiedObject
 
 from leap.bitmask import __version__ as VERSION
 from leap.bitmask.config.leapsettings import LeapSettings
@@ -247,6 +247,7 @@ class MainWindow(QtGui.QMainWindow):
             self._mail_status.set_soledad_failed)
 
         self.ui.action_about_leap.triggered.connect(self._about)
+        self.ui.action_console.triggered.connect(self._console)
         self.ui.action_quit.triggered.connect(self.quit)
         self.ui.action_wizard.triggered.connect(self._launch_wizard)
         self.ui.action_show_logs.triggered.connect(self._show_logger_window)
@@ -738,6 +739,13 @@ class MainWindow(QtGui.QMainWindow):
                     "<a href='https://leap.se'>More about LEAP"
                     "</a>") % (VERSION,))
 
+    def _console(self):
+        """
+        Triggers interactive ipython widget
+        """
+        if self.ipy is not None:
+            self.ipy.show()
+
     def changeEvent(self, e):
         """
         Reimplements the changeEvent method to minimize to tray
@@ -1012,6 +1020,7 @@ class MainWindow(QtGui.QMainWindow):
 
         # Update the proxy objects to point to
         # the initialized instances.
+        # Remember! to compare, use sameProxiedObjects
         setProxiedObject(self._soledad,
                          self._soledad_bootstrapper.soledad)
         setProxiedObject(self._keymanager,

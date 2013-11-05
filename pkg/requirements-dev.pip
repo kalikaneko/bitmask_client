@@ -12,6 +12,10 @@
 #       will only install this)
 
 sphinx
+ipython==0.13.2
+
+# you'll need also zeromq installed.
+pyzmq
 
 -e git+https://github.com/leapcode/leap_pycommon.git@develop#egg=leap.common
 -e git+https://github.com/leapcode/soledad.git@develop#egg=leap.soledad

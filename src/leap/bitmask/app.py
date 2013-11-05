@@ -162,6 +162,21 @@ def replace_stdout_stderr_with_logging(logger):
         log.startLogging(sys.stdout)
 
 
+def ipython_magic():
+    """
+    Creates a widget connected with an ipythonLocalKernelApp
+    for interactive debugging.
+    """
+    import leap.bitmask.gui.ipython_widget as ipy
+    kernelapp = ipy.IPythonLocalKernelApp.instance()
+    kernelapp.start()
+    namespace = kernelapp.get_user_namespace()
+    widget = ipy.IPythonConsoleQtWidget()
+    widget.set_default_style(colors='linux')
+    widget.connect_kernel(connection_file=kernelapp.get_connection_file())
+    return widget, namespace
+
+
 def main():
     """
     Starts the main event loop and launches the main window.
@@ -177,6 +192,7 @@ def main():
     debug = opts.debug
     logfile = opts.log_file
     openvpn_verb = opts.openvpn_verb
+    develop_mode = opts.develop
 
     try:
         event_server.ensure_server(event_server.SERVER_PORT)
@@ -188,9 +204,12 @@ def main():
     # Given how paths and bundling works, we need to delay the imports
     # of certain parts that depend on this path settings.
     # So first we set all the places where standalone might be queried.
+    #
+    # ^^ I think we do not need the imports to be here anymore -- kali
     from leap.bitmask.config import flags
     from leap.common.config.baseconfig import BaseConfig
     flags.STANDALONE = standalone
+    flags.DEVELOP = develop_mode
     BaseConfig.standalone = standalone
 
     logger = add_logger_handlers(debug, logfile)
@@ -250,19 +269,22 @@ def main():
     app.setApplicationName("leap")
     app.setOrganizationDomain("leap.se")
 
-    # XXX ---------------------------------------------------------
-    # In quarantine, looks like we don't need it anymore.
-    # This dummy timer ensures that control is given to the outside
-    # loop, so we can hook our sigint handler.
-    #timer = QtCore.QTimer()
-    #timer.start(500)
-    #timer.timeout.connect(lambda: None)
-    # XXX ---------------------------------------------------------
-
     window = MainWindow(
         lambda: twisted_main.quit(app),
         openvpn_verb=openvpn_verb,
         bypass_checks=bypass_checks)
+
+    if flags.DEVELOP:
+        # Show development console
+        ipy_widget, namespace = ipython_magic()
+        namespace["widget"] = ipy_widget
+        namespace["main"] = window
+        namespace["QtGui"] = QtGui
+        namespace["QtCore"] = QtCore
+        window.ipy = ipy_widget
+    else:
+        # normal run, hide development mode.
+        window.ui.action_console.setVisible(False)
 
     sigint_window = partial(sigint_handler, window, logger=logger)
     signal.signal(signal.SIGINT, sigint_window)
