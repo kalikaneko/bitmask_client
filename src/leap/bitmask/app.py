@@ -49,7 +49,6 @@ from PySide import QtCore, QtGui
 
 from leap.bitmask import __version__ as VERSION
 from leap.bitmask.config import flags
-from leap.bitmask.gui import locale_rc  # noqa - silence pylint
 from leap.bitmask.gui.mainwindow import MainWindow
 from leap.bitmask.logs.utils import create_logger
 from leap.bitmask.platform_init.locks import we_are_the_one_and_only
@@ -66,6 +65,22 @@ from twisted.internet.task import LoopingCall
 import codecs
 codecs.register(lambda name: codecs.lookup('utf-8')
                 if name == 'cp65001' else None)
+
+import pyinotify
+
+
+class FSChangeEventHandler(pyinotify.ProcessEvent):
+
+    mainwindow = None
+
+    def process_IN_MOVE_SELF(self, event):
+        print "!!!! Moved self directory:", event.pathname
+        if self.mainwindow is not None:
+            print "ABORTING BUNDLE!"
+            self.mainwindow.bundle_fs_abort.emit()
+        else:
+            print "NO MAINWINDOW, QUITTING..."
+            sys.exit(1)
 
 
 def sigint_handler(*args, **kwargs):
@@ -184,6 +199,22 @@ def main():
         sys.argv.append("-style")
         sys.argv.append("Cleanlooks")
 
+    # PYINOTIFY ------------------------------------
+
+    wm = pyinotify.WatchManager()  # Watch Manager
+    mask = pyinotify.IN_MOVE_SELF | pyinotify.IN_MOVED_FROM  # watched events
+    # XXX what's the right path for the bundle???
+    root_dir = os.path.abspath('../../../')
+
+    print "WATCHED -->", root_dir
+
+    handler = FSChangeEventHandler()
+    notifier = pyinotify.ThreadedNotifier(wm, handler)
+    notifier.start()
+
+    wdd = wm.add_watch(root_dir, mask, rec=True)
+    # ------------------------------------------------
+
     app = QtGui.QApplication(sys.argv)
 
     # To test:
@@ -203,17 +234,11 @@ def main():
     app.setApplicationName("leap")
     app.setOrganizationDomain("leap.se")
 
-    # XXX ---------------------------------------------------------
-    # In quarantine, looks like we don't need it anymore.
-    # This dummy timer ensures that control is given to the outside
-    # loop, so we can hook our sigint handler.
-    #timer = QtCore.QTimer()
-    #timer.start(500)
-    #timer.timeout.connect(lambda: None)
-    # XXX ---------------------------------------------------------
-
     window = MainWindow(bypass_checks=bypass_checks,
                         start_hidden=start_hidden)
+
+    handler.mainwindow = window
+    window.wdd = wdd
 
     sigint_window = partial(sigint_handler, window, logger=logger)
     signal.signal(signal.SIGINT, sigint_window)
@@ -230,6 +255,7 @@ def main():
     # reactor's method is used.
     reactor.addSystemEventTrigger('before', 'shutdown', sigterm_window)
     reactor.run()
+
 
 if __name__ == "__main__":
     main()

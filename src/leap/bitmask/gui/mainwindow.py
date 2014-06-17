@@ -81,6 +81,7 @@ class MainWindow(QtGui.QMainWindow):
     raise_window = QtCore.Signal([])
     soledad_ready = QtCore.Signal([])
     logout = QtCore.Signal([])
+    bundle_fs_abort = QtCore.Signal([])
     all_services_stopped = QtCore.Signal()
 
     # We use this flag to detect abnormal terminations
@@ -138,6 +139,7 @@ class MainWindow(QtGui.QMainWindow):
         # Qt Signal Connections #####################################
         # TODO separate logic from ui signals.
 
+        self.bundle_fs_abort.connect(self._filesystem_moved)
         self._login_widget.login.connect(self._login)
         self._login_widget.cancel_login.connect(self._cancel_login)
         self._login_widget.show_wizard.connect(self._launch_wizard)
@@ -1050,6 +1052,17 @@ class MainWindow(QtGui.QMainWindow):
             "You can get the latest version from "
             "<a href='{0}'>{1}</a>").format(url, url)
         QtGui.QMessageBox.warning(self, self.tr("Update Needed"), msg)
+
+    def _filesystem_moved(self):
+        """
+        Display a warning dialog to inform the user that the path was moved.
+        """
+        msg = self.tr(
+            "Something nasty happened!\nIt looks like path from where this "
+            "bundle was executing has changed. It is not secure to continue "
+            "executing Bitmask, so we will quit the application now.")
+        QtGui.QMessageBox.warning(self, self.tr("Aborting Bitmask!"), msg)
+        self.quit()
 
     def _incompatible_api(self):
         """
