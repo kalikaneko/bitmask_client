@@ -9,6 +9,8 @@
 # Uncomment this to turn on verbose mode.
 #DH_VERBOSE=1
 DEB_BUILD_OPTIONS=nocheck
+PKGDIR=/opt/extras.ubuntu.com/bitmask
+
 package=bitmask
 
 PYTHON2=$(shell pyversions -vr)
@@ -46,6 +48,9 @@ build-python%:
 
 install-python%:
 	python$* setup.py install --root=$(CURDIR)/debian/tmp --install-layout=deb
+
+override_dh_auto_install:
+	dh_auto_install -- --install-lib=$(PKGDIR) --install-scripts=$(PKGDIR) --install-data=$(PKGDIR)
 
 #override_dh_auto_install: $(PYTHON3:%=install-python%)
 #        dh_auto_install

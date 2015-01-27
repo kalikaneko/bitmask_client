@@ -1,1 +1,10 @@
 dist/leap_client-0.1dev-py2.7.egg
+debian/icons/hicolor/128x128/apps/bitmask.png
+debian/icons/hicolor/32x32/apps/bitmask.png
+debian/icons/hicolor/256x256/apps/bitmask.png
+debian/icons/hicolor/48x48/apps/bitmask.png
+debian/icons/hicolor/64x64/apps/bitmask.png
+debian/icons/hicolor/24x24/apps/bitmask.png
+
+
+

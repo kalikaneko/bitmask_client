@@ -1,3 +1,14 @@
+bitmask (0.8.0~rc3-0extras15.04.1) vivid; urgency=medium
+
+  * Change install path for ARB requirement, see:
+  https://wiki.ubuntu.com/AppReviewBoard/Submissions/InstallPathTips
+  * Add debian/extras-bitmask.desktop, as indicated by:
+  https://wiki.ubuntu.com/AppReviewBoard/Submissions/PackageQuickStart
+  * Change debian/source/format to 3.0 (quilt)
+  * Add icons in debian/icons to debian/source/include-binaries
+
+ -- Micah Anderson <micah@debian.org>  Tue, 27 Jan 2015 16:27:53 -0500
+
 bitmask (0.8.0~rc3) unstable; urgency=medium
 
   * Update to 0.8.0rc3 release.
