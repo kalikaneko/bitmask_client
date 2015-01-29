@@ -254,6 +254,8 @@ cmdclass["sdist"] = cmd_sdist
 import platform
 _system = platform.system()
 IS_LINUX = _system == "Linux"
+IS_UBUNTU_APP = os.environ.get('UBUNTU_APP', None)
+
 IS_MAC = _system == "Darwin"
 
 data_files = []
@@ -264,9 +266,12 @@ if IS_LINUX:
         ("helpers/", ["pkg/linux/bitmask-root"]),
         ("helpers/policykit/",
             ["pkg/linux/polkit/se.leap.bitmask.policy"]),
-        ('/usr/share/applications',
-         ['debian/extras-bitmask.desktop']),
     ]
+
+if IS_UBUNTU_APP:
+    data_files.append(
+        ('/usr/share/applications',
+         ['debian/extras-bitmask.desktop']))
 
 if IS_MAC:
     extra_options["app"] = ['src/leap/bitmask/app.py']

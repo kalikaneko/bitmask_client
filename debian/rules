@@ -52,9 +52,7 @@ install-python%:
 	python$* setup.py install --root=$(CURDIR)/debian/tmp --install-layout=deb
 
 override_dh_auto_install:
-	dh_auto_install -- --install-lib=$(PKGDIR) --install-scripts=$(PKGDIR)/bin --install-data=$(PKGDIR)/data
-#override_dh_auto_install: $(PYTHON3:%=install-python%)
-#        dh_auto_install
+	export UBUNTU_APP=1 && dh_auto_install -- --install-lib=$(PKGDIR) --install-scripts=$(PKGDIR)/bin --install-data=$(PKGDIR)/data
 
 # build and install sphinx docs
 # 
