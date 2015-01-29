@@ -257,18 +257,16 @@ IS_LINUX = _system == "Linux"
 IS_MAC = _system == "Darwin"
 
 data_files = []
+extra_options = {}
 
 if IS_LINUX:
-    # XXX use check_for_permissions to install data
-    # globally. Or make specific install command. See #3805
     data_files = [
-        ("share/polkit-1/actions",
-         ["pkg/linux/polkit/se.leap.bitmask.policy"]),
-        ("/usr/sbin",
-         ["pkg/linux/bitmask-root"]),
+        ("helpers/", ["pkg/linux/bitmask-root"]),
+        ("helpers/policykit/",
+            ["pkg/linux/polkit/se.leap.bitmask.policy"]),
+        ('/usr/share/applications',
+         ['debian/extras-bitmask.desktop']),
     ]
-
-extra_options = {}
 
 if IS_MAC:
     extra_options["app"] = ['src/leap/bitmask/app.py']
@@ -323,8 +321,6 @@ setup(
     namespace_packages=["leap"],
     package_data={'': ['util/*.txt']},
     include_package_data=True,
-    # not being used? -- setuptools does not like it.
-    # looks like debhelper is honoring it...
     data_files=data_files,
     zip_safe=False,
     platforms="all",
