@@ -167,6 +167,13 @@ sumo_tarball_latest: checkout_leapdeps_develop pull_leapdeps setup_without_names
 pyinst:
 	pyinstaller -y pkg/pyinst/bitmask.spec
 
+pyinst-oks:
+	pyinstaller -y pkg/pyinst/bitmask.spec
+	mkdir -p dist/Bitmask.app/Contents/MacOS/cryptography/hazmat/bindings/openssl/src/
+	cp pkg/pyinst/cryptography/osrandom_engine.* dist/Bitmask.app/Contents/MacOS/cryptography/hazmat/bindings/openssl/src/
+	mv dist/Bitmask.app/Contents/MacOS/bitmask dist/Bitmask.app/Contents/MacOS/bitmask-app
+	cp pkg/osx/bitmask-wrapper dist/Bitmask.app/Contents/MacOS/bitmask
+
 clean_pkg:
 	rm -rf build dist
 
