@@ -162,12 +162,11 @@ sumo_tarball_latest: checkout_leapdeps_develop pull_leapdeps
 pyinst:
 	pyinstaller -y pkg/pyinst/bitmask.spec
 
-pyinst_osx:
-	pyinstaller -y pkg/pyinst/bitmask.spec
-	#mkdir -p dist/Bitmask.app/Contents/MacOS/cryptography/hazmat/bindings/openssl/src/
-	#cp pkg/pyinst/cryptography/osrandom_engine.* dist/Bitmask.app/Contents/MacOS/cryptography/hazmat/bindings/openssl/src/
+pyinst_osx: pyinst
 	mv dist/Bitmask.app/Contents/MacOS/bitmask dist/Bitmask.app/Contents/MacOS/bitmask-app
 	cp pkg/osx/bitmask-wrapper dist/Bitmask.app/Contents/MacOS/bitmask
+	# XXX hack... this contains the gpg binary (brew), but we need to build it from sources.
+	cp -r src/leap/bitmask/util/apps dist/Bitmask.app/Contents/MacOS/
 
 clean_pkg:
 	rm -rf build dist
