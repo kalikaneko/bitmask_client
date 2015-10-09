@@ -167,6 +167,8 @@ pyinst_osx: pyinst
 	cp pkg/osx/bitmask-wrapper dist/Bitmask.app/Contents/MacOS/bitmask
 	# XXX hack... this contains the gpg binary (brew), but we need to build it from sources.
 	cp -r src/leap/bitmask/util/apps dist/Bitmask.app/Contents/MacOS/
+	# XXX this should be taken care of by pyinstaller data collector
+	cp $VIRTUAL_ENV/lib/python2.7/site-packages/leap/common/cacert.pem dist/Bitmask.app/Contents/MacOS/
 
 clean_pkg:
 	rm -rf build dist
