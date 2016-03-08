@@ -485,6 +485,7 @@ extra_options = {}
 
 gui_launcher = 'bitmask=leap.bitmask.app:start_app'
 bitmask_cli = 'bitmask_cli=leap.bitmask.cli.bitmask_cli:main'
+bitmaskd = 'bitmaskd=leap.bitmask.core.launcher:run_bitmaskd'
 
 
 setup(
@@ -522,7 +523,7 @@ setup(
     zip_safe=False,
     platforms="all",
     entry_points={
-        'console_scripts': [gui_launcher, bitmask_cli]
+        'console_scripts': [gui_launcher, bitmask_cli, bitmaskd]
     },
     **extra_options
 )
