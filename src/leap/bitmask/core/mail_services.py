@@ -358,8 +358,6 @@ class StandardMailService(service.MultiService, HookableService):
 
     # TODO factor out Mail Service to inside mail package.
 
-    subscribed_to_hooks = ('on_new_keymanager_instance',)
-
     def __init__(self, basedir):
         self._basedir = basedir
         self._soledad_sessions = {}
@@ -411,7 +409,18 @@ class StandardMailService(service.MultiService, HookableService):
         d.addCallback(
             lambda _: soledad.get_or_create_service_token('smtp'))
         d.addCallback(registerSMTPToken)
+
+        d.addCallback(self.start_pixelated_agent, userid, soledad, keymanager)
         return d
+
+    # FIXME -------------------------------------------------------
+    # work-in-progress --------------------------------------------
+    def start_pixelated_agent(self, ignored, userid, soledad, keymanager):
+        print userid, soledad, keymanager
+        from .pix import start_pixelated_user_agent
+        return start_pixelated_user_agent(userid, soledad, keymanager)
+
+    # FIXME -------------------------------------------------------
 
     def stopInstance(self):
         pass
