@@ -325,7 +325,6 @@
     <property name="title">
      <string>&amp;Help</string>
     </property>
-    <addaction name="action_help"/>
     <addaction name="action_show_logs"/>
     <addaction name="separator"/>
     <addaction name="action_about_leap"/>
@@ -349,11 +348,6 @@
   <action name="action_about_leap">
    <property name="text">
     <string>About &amp;Bitmask</string>
-   </property>
-  </action>
-  <action name="action_help">
-   <property name="text">
-    <string>&amp;Help</string>
    </property>
   </action>
   <action name="action_wizard">

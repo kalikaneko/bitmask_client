@@ -238,8 +238,10 @@ class MainWindow(QtGui.QMainWindow, SignalTracker):
         self.ui.action_wizard.triggered.connect(self._show_wizard)
         self.ui.action_show_logs.triggered.connect(self._show_logger_window)
 
-        self.ui.action_help.setVisible(True)
-        self.ui.action_help.triggered.connect(self._help)
+        # XXX commenting out the "help" menu, that info is mainly in the
+        # preferences window now.
+        # self.ui.action_help.setVisible(False)
+        # self.ui.action_help.triggered.connect(self._help)
 
         self.ui.action_create_new_account.triggered.connect(
             self._on_provider_changed)
