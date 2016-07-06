@@ -104,21 +104,22 @@ SUBCOMMANDS:
         return self._send()
 
     def _print_key_list(self, keys):
-        print Fore.GREEN
         for key in keys:
-            print key["fingerprint"] + " " + key['address']
-        print Fore.RESET
+            print(Fore.GREEN +
+                  key["fingerprint"] + " " + key['address'] +
+                  Fore.RESET)
 
     def _print_key(self, key):
-        print Fore.GREEN
-        print "Uids:        " + ', '.join(key['uids'])
-        print "Fingerprint: " + key['fingerprint']
-        print "Length:      " + str(key['length'])
-        print "Expiration:  " + key['expiry_date']
-        print "Validation:  " + key['validation']
-        print("Used:        " + "sig:" + str(key['sign_used']) +
-              ", encr:" + str(key['encr_used']))
-        print "Refresed:    " + key['refreshed_at']
-        print Fore.RESET
-        print ""
-        print key['key_data']
+        print(Fore.GREEN)
+        print("Uids:       (" + ', '.join(key['uids']))
+        print("Fingerprint:(" + key['fingerprint'])
+        print("Length:     (" + str(key['length']))
+        print("Expiration: (" + key['expiry_date'])
+        print("Validation: (" + key['validation'])
+        print("Used:       (" + "sig:" +
+              str(key['sign_used']) + ", encr:" +
+              str(key['encr_used']))
+        print("Refresed:   (" + key['refreshed_at'])
+        print(Fore.RESET)
+        print("")
+        print(key['key_data'])

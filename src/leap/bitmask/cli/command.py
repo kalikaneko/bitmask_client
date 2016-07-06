@@ -34,8 +34,14 @@ from leap.bitmask.core import ENDPOINT
 def _print_result(result):
     print Fore.GREEN + '%s' % result + Fore.RESET
 
+def _default_dict_printer(result):
+    for key, value in result.items():
+        print(Fore.RESET + key.ljust(10) + Fore.GREEN + value + Fore.RESET)
+
 
 class Command(object):
+    """A generic command dispatcher.
+    Any command in the class attribute `commands` will be dispached and represented with a generic printer.""" 
     service = ''
     usage = '''%s %s <subcommand>''' % tuple(sys.argv[:2])
     epilog = ("Use '%s %s <subcommand> --help' to learn more "
@@ -61,9 +67,11 @@ class Command(object):
         except SystemExit:
             return defer.succeed(None)
 
+        # if command is in the default list, send the bare command
+        # and use the default printer
         if args.command in self.commands:
             self.data += [args.command]
-            return self._send()
+            return self._send(printer=_default_dict_printer)
 
         elif (args.command == 'execute' or
                 args.command.startswith('_') or
